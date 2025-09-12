@@ -27,12 +27,16 @@ koomer/
 └── koomer-server/   # 服务启动模块
 ```
 
-
 核心组件：
-- [Socks5InitialRequestHandler](file://D:\dev\git_repo\新建文件夹\koomer\koomer-core\src\main\java\cn\suhoan\koomer\handler\Socks5InitialRequestHandler.java#L13-L26): 处理SOCKS5初始握手请求
-- [Socks5CommandRequestHandler](file://D:\dev\git_repo\新建文件夹\koomer\koomer-core\src\main\java\cn\suhoan\koomer\handler\Socks5CommandRequestHandler.java#L16-L145): 处理SOCKS5命令请求（CONNECT/UDP_ASSOCIATE）
-- [Socks5UdpServerHandler](file://D:\dev\git_repo\新建文件夹\koomer\koomer-core\src\main\java\cn\suhoan\koomer\handler\Socks5UdpServerHandler.java#L21-L182): 处理UDP数据转发
-- [RelayHandler](file://D:\dev\git_repo\新建文件夹\koomer\koomer-core\src\main\java\cn\suhoan\koomer\handler\RelayHandler.java#L13-L53): 在客户端和目标服务器之间转发数据
+
+- [Socks5InitialRequestHandler](file://D:\dev\git_repo\新建文件夹\koomer\koomer-core\src\main\java\cn\suhoan\koomer\handler\Socks5InitialRequestHandler.java#L13-L26):
+  处理SOCKS5初始握手请求
+- [Socks5CommandRequestHandler](file://D:\dev\git_repo\新建文件夹\koomer\koomer-core\src\main\java\cn\suhoan\koomer\handler\Socks5CommandRequestHandler.java#L16-L145):
+  处理SOCKS5命令请求（CONNECT/UDP_ASSOCIATE）
+- [Socks5UdpServerHandler](file://D:\dev\git_repo\新建文件夹\koomer\koomer-core\src\main\java\cn\suhoan\koomer\handler\Socks5UdpServerHandler.java#L21-L182):
+  处理UDP数据转发
+- [RelayHandler](file://D:\dev\git_repo\新建文件夹\koomer\koomer-core\src\main\java\cn\suhoan\koomer\handler\RelayHandler.java#L13-L53):
+  在客户端和目标服务器之间转发数据
 
 ## 快速开始
 
@@ -54,7 +58,6 @@ cd koomer
 mvn clean package
 ```
 
-
 ### 运行服务
 
 1. 使用java命令直接启动
@@ -64,10 +67,13 @@ mvn clean package
 java -jar koomer-server/target/koomer-server.jar [-h 0.0.0.0] [-p 10808]
 ```
 
-| 参数 | 描述                            |
-|----|-------------------------------|
-| -h | 指定监听地址，默认绑定::0（同时监听ipv4和ipv6） |
-| -p | 监听端口，默认监听端口为 10808。           |
+| 参数            | 简写   | 参数示例       | 描述                            |
+|---------------|------|------------|-------------------------------|
+| --host        | -h   | 0.0.0.0    | 指定监听地址，默认绑定::0（同时监听ipv4和ipv6） |
+| --port        | -p   | 10808      | 监听端口，默认监听端口为 10808。           |
+| --enable-auth | -a   | 无参数        | 启用身份验证功能，默认关闭。                |
+| --username    | -u   | myusername | 身份验证用户名，默认为空，未启用身份验证功能时自动忽略。  |
+| --password    | -pwd | changit    | 身份验证密码，默认为空，未启用身份验证功能时自动忽略。   |
 
 2. 使用docker启动
 
@@ -78,6 +84,7 @@ docker run -d --name koomer --network host --restart always swr.cn-east-3.myhuaw
 ### 使用代理
 
 配置您的应用程序或系统使用 SOCKS5 代理：
+
 - 代理地址: localhost
 - 代理端口: 10808
 
@@ -103,13 +110,15 @@ docker run -d --name koomer --network host --restart always swr.cn-east-3.myhuaw
 
 ### 主要类说明
 
-- [Socks5ProxyServer](file://D:\dev\git_repo\新建文件夹\koomer\koomer-server\src\main\java\cn\suhoan\koomer\Socks5ProxyServer.java#L22-L67): 主服务器类，负责启动 SOCKS5 代理服务
+- [Socks5ProxyServer](file://D:\dev\git_repo\新建文件夹\koomer\koomer-server\src\main\java\cn\suhoan\koomer\Socks5ProxyServer.java#L22-L67):
+  主服务器类，负责启动 SOCKS5 代理服务
 - [App](file://D:\dev\git_repo\新建文件夹\koomer\koomer-server\src\main\java\cn\suhoan\koomer\App.java#L9-L37): 应用程序入口点
 - 各种 Handler 类负责处理 SOCKS5 协议的不同阶段
 
 ### 扩展功能
 
 您可以根据需要修改以下组件：
+
 - 添加身份验证支持
 - 实现访问控制列表
 - 添加流量统计功能

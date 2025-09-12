@@ -10,6 +10,7 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.socksx.v5.Socks5CommandRequestDecoder;
 import io.netty.handler.codec.socksx.v5.Socks5InitialRequestDecoder;
+import io.netty.handler.codec.socksx.v5.Socks5PasswordAuthRequestDecoder;
 import io.netty.handler.codec.socksx.v5.Socks5ServerEncoder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,10 +28,20 @@ public class Socks5ProxyServer {
     private final String host;
 
     private final int port;
+    private final boolean enableAuth;
+    private final String username;
+    private final String password;
 
     public Socks5ProxyServer(String host, int port) {
+        this(host, port, false, null, null);
+    }
+
+    public Socks5ProxyServer(String host, int port, boolean enableAuth, String username, String password) {
         this.port = port;
         this.host = host;
+        this.enableAuth = enableAuth;
+        this.username = username;
+        this.password = password;
     }
 
     public void start() throws Exception {
@@ -49,7 +60,8 @@ public class Socks5ProxyServer {
                             ch.pipeline()
                                     .addLast(Socks5ServerEncoder.DEFAULT)
                                     .addLast(new Socks5InitialRequestDecoder())
-                                    .addLast(new Socks5InitialRequestHandler())
+                                    .addLast(enableAuth ? new Socks5InitialRequestHandler(enableAuth, username, password) : new Socks5InitialRequestHandler())
+                                    .addLast(new Socks5PasswordAuthRequestDecoder())
                                     .addLast(new Socks5CommandRequestDecoder())
                                     .addLast(new Socks5CommandRequestHandler());
                         }
@@ -57,12 +69,13 @@ public class Socks5ProxyServer {
                     .option(ChannelOption.SO_BACKLOG, 128)
                     .childOption(ChannelOption.SO_KEEPALIVE, true);
 
-            log.info("SOCKS5 Proxy Server started on {}:{}", host, port);
+            log.info("SOCKS5 Proxy Server started on {}:{} with the authentication mode is {}.", host, port, enableAuth ? "enabled" : "disabled");
             ChannelFuture f = b.bind(host, port).sync();
             f.channel().closeFuture().sync();
         } finally {
             workerGroup.shutdownGracefully();
             bossGroup.shutdownGracefully();
+            log.info("SOCKS5 Proxy Server stopped.");
         }
     }
 }
