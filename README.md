@@ -13,10 +13,10 @@ Koomer 是一个基于 Netty 实现的高性能 SOCKS5 代理服务器，支持 
 
 ## 技术栈
 
-- Java 21
-- Netty 4.2.6.Final
-- Logback 1.5.18
-- Maven 构建工具
+- Java21
+- Netty4
+- Logback
+- Maven
 
 ## 项目结构
 
@@ -57,19 +57,29 @@ mvn clean package
 
 ### 运行服务
 
+1. 使用java命令直接启动
+
 ```bash
 # 运行打包后的jar文件
-java -jar koomer-server/target/koomer-server.jar
+java -jar koomer-server/target/koomer-server.jar [-h 0.0.0.0] [-p 10808]
 ```
 
+| 参数 | 描述                            |
+|----|-------------------------------|
+| -h | 指定监听地址，默认绑定::0（同时监听ipv4和ipv6） |
+| -p | 监听端口，默认监听端口为 10808。           |
 
-默认监听端口为 10808。
+2. 使用docker启动
+
+```bash
+docker run -d --name koomer --network host --restart always swr.cn-east-3.myhuaweicloud.com/suhoan/koomer:latest
+```
 
 ### 使用代理
 
 配置您的应用程序或系统使用 SOCKS5 代理：
 - 代理地址: localhost
-- 代理端口: 1080
+- 代理端口: 10808
 
 ## 使用示例
 
@@ -78,7 +88,7 @@ java -jar koomer-server/target/koomer-server.jar
 1. 浏览器代理设置
 2. curl 命令:
    ```bash
-   curl --socks5 localhost:10808 https://www.suhoan.com
+   curl --socks5 localhost:10808 https://www.suhoan.cn
    ```
 
 
@@ -113,7 +123,7 @@ java -jar koomer-server/target/koomer-server.jar
 
 ## 许可证
 
-[待添加许可证信息]
+[MIT](LICENSE)
 
 ## 贡献
 

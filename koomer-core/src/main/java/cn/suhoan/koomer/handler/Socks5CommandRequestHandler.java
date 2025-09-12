@@ -143,4 +143,10 @@ public class Socks5CommandRequestHandler extends SimpleChannelInboundHandler<Soc
         }
         ctx.fireChannelInactive();
     }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        log.error("Socks5 command handle error", cause);
+        ctx.close();
+    }
 }
