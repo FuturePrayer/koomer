@@ -59,9 +59,16 @@ public class Socks5ProxyServer {
                         protected void initChannel(SocketChannel ch) {
                             ch.pipeline()
                                     .addLast(Socks5ServerEncoder.DEFAULT)
-                                    .addLast(new Socks5InitialRequestDecoder())
-                                    .addLast(enableAuth ? new Socks5InitialRequestHandler(enableAuth, username, password) : new Socks5InitialRequestHandler())
-                                    .addLast(new Socks5PasswordAuthRequestDecoder())
+                                    .addLast(new Socks5InitialRequestDecoder());
+                            if (enableAuth) {
+                                ch.pipeline()
+                                        .addLast(new Socks5InitialRequestHandler(enableAuth, username, password))
+                                        .addLast(new Socks5PasswordAuthRequestDecoder());
+                            } else {
+                                ch.pipeline()
+                                        .addLast(new Socks5InitialRequestHandler());
+                            }
+                            ch.pipeline()
                                     .addLast(new Socks5CommandRequestDecoder())
                                     .addLast(new Socks5CommandRequestHandler());
                         }
