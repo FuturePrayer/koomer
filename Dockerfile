@@ -1,5 +1,5 @@
 # 使用官方的OpenJDK镜像作为基础镜像
-FROM openjdk:25
+FROM swr.cn-east-3.myhuaweicloud.com/library/openjdk:25
 
 # 设置工作目录
 WORKDIR /app
