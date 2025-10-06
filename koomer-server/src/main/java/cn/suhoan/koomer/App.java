@@ -11,7 +11,7 @@ public class App {
 
     private static final Logger log = LoggerFactory.getLogger(App.class);
 
-    public static void main(String[] args) {
+    static void main(String[] args) {
         try {
             int port = 10808;
             String host = "::0";
@@ -19,6 +19,19 @@ public class App {
             String username = null;
             String password = null;
             for (int i = 0; i < args.length; i++) {
+                if (args[i].equals("-h") || args[i].equals("--help")){
+                    IO.println("""
+                            Usage: java -jar koomer.jar [options]
+                            Options:
+                              -h, --help                  Show this help message and exit.
+                              -p, --port <port>           Set the port number to listen on.
+                              -l, --host <host>           Set the host to listen on.
+                              -a, --enable-auth           Enable authentication.
+                              -u, --username <username>     Set the username for authentication.
+                              -w, --password <password>     Set the password for authentication.
+                            """);
+                    return;
+                }
                 if (args[i].equals("-p") || args[i].equals("--port")) {
                     try {
                         port = Integer.parseInt(args[i + 1]);
@@ -28,7 +41,7 @@ public class App {
                         log.warn("Missing port number, program will start on default port {}.", port);
                     }
                 }
-                if (args[i].equals("-h") || args[i].equals("--host")) {
+                if (args[i].equals("-l") || args[i].equals("--host")) {
                     try {
                         host = args[i + 1];
                     } catch (ArrayIndexOutOfBoundsException e) {
@@ -45,7 +58,7 @@ public class App {
                         throw new IllegalArgumentException("Missing username");
                     }
                 }
-                if (args[i].equals("-pwd") || args[i].equals("--password")) {
+                if (args[i].equals("-w") || args[i].equals("--password")) {
                     try {
                         password = args[i + 1];
                     } catch (ArrayIndexOutOfBoundsException e) {

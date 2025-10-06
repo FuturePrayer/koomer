@@ -32,6 +32,7 @@ public class Socks5UdpServerHandler extends SimpleChannelInboundHandler<Datagram
     private final Channel clientChannel; // 与客户端的TCP连接通道
 
     public Socks5UdpServerHandler(Channel clientChannel) {
+        super(false);
         this.clientChannel = clientChannel;
     }
 

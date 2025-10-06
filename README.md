@@ -13,7 +13,7 @@ Koomer 是一个基于 Netty 实现的高性能 SOCKS5 代理服务器，支持 
 
 ## 技术栈
 
-- Java21
+- Java25
 - Netty4
 - Logback
 - Maven
@@ -42,7 +42,7 @@ koomer/
 
 ### 环境要求
 
-- JDK 21 或更高版本
+- JDK 25 或更高版本
 - Maven 3.6 或更高版本
 
 ### 构建项目
@@ -64,16 +64,16 @@ mvn clean package
 
 ```bash
 # 运行打包后的jar文件
-java -jar koomer-server/target/koomer-server.jar [-h 0.0.0.0] [-p 10808]
+java -jar koomer-server/target/koomer-server.jar [-l 0.0.0.0] [-p 10808]
 ```
 
-| 参数            | 简写   | 参数示例       | 描述                            |
-|---------------|------|------------|-------------------------------|
-| --host        | -h   | 0.0.0.0    | 指定监听地址，默认绑定::0（同时监听ipv4和ipv6） |
-| --port        | -p   | 10808      | 监听端口，默认监听端口为 10808。           |
-| --enable-auth | -a   | 无参数        | 启用身份验证功能，默认关闭。                |
-| --username    | -u   | myusername | 身份验证用户名，默认为空，未启用身份验证功能时自动忽略。  |
-| --password    | -pwd | changit    | 身份验证密码，默认为空，未启用身份验证功能时自动忽略。   |
+| 参数            | 简写 | 参数示例       | 描述                            |
+|---------------|----|------------|-------------------------------|
+| --host        | -l | 0.0.0.0    | 指定监听地址，默认绑定::0（同时监听ipv4和ipv6） |
+| --port        | -p | 10808      | 监听端口，默认监听端口为 10808。           |
+| --enable-auth | -a | 无参数        | 启用身份验证功能，默认关闭。                |
+| --username    | -u | myusername | 身份验证用户名，默认为空，未启用身份验证功能时自动忽略。  |
+| --password    | -w | changit    | 身份验证密码，默认为空，未启用身份验证功能时自动忽略。   |
 
 2. 使用docker启动
 
@@ -114,21 +114,6 @@ docker run -d --name koomer --network host --restart always swr.cn-east-3.myhuaw
   主服务器类，负责启动 SOCKS5 代理服务
 - [App](file://D:\dev\git_repo\新建文件夹\koomer\koomer-server\src\main\java\cn\suhoan\koomer\App.java#L9-L37): 应用程序入口点
 - 各种 Handler 类负责处理 SOCKS5 协议的不同阶段
-
-### 扩展功能
-
-您可以根据需要修改以下组件：
-
-- 添加身份验证支持
-- 实现访问控制列表
-- 添加流量统计功能
-- 自定义日志格式
-
-## 注意事项
-
-1. 当前版本为基本功能实现，未包含用户认证功能
-2. UDP 转发功能需要客户端正确实现 SOCKS5 UDP ASSOCIATE 命令
-3. 服务默认监听所有网络接口的 1080 端口
 
 ## 许可证
 
