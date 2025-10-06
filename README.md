@@ -73,7 +73,7 @@ java -jar koomer-server/target/koomer-server.jar [-l 0.0.0.0] [-p 10808]
 | --port        | -p | 10808      | 监听端口，默认监听端口为 10808。           |
 | --enable-auth | -a | 无参数        | 启用身份验证功能，默认关闭。                |
 | --username    | -u | myusername | 身份验证用户名，默认为空，未启用身份验证功能时自动忽略。  |
-| --password    | -w | changit    | 身份验证密码，默认为空，未启用身份验证功能时自动忽略。   |
+| --password    | -w | changeit   | 身份验证密码，默认为空，未启用身份验证功能时自动忽略。   |
 
 2. 使用docker启动
 

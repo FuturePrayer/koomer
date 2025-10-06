@@ -8,6 +8,8 @@ import io.netty.handler.codec.socksx.v5.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.Inet6Address;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 
 /**
@@ -77,6 +79,17 @@ public class Socks5CommandRequestHandler extends SimpleChannelInboundHandler<Soc
     }
 
     private void handleUdpAssociate(ChannelHandlerContext ctx, Socks5CommandRequest request) {
+        // 获取服务端本地地址
+        InetSocketAddress localAddress = (InetSocketAddress) ctx.channel().localAddress();
+        // 获取服务器的 IP 地址字符串
+        String serverIp = localAddress.getHostString();
+
+        // 获取远程地址
+        InetSocketAddress remoteAddress = (InetSocketAddress) ctx.channel().remoteAddress();
+        // 获取客户端的 IP 地址字符串
+        String clientIp = remoteAddress.getHostString();
+        int clientPort = remoteAddress.getPort();
+
         // 创建UDP服务器
         EventLoopGroup udpGroup = new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory());
         Bootstrap udpBootstrap = new Bootstrap();
@@ -96,15 +109,17 @@ public class Socks5CommandRequestHandler extends SimpleChannelInboundHandler<Soc
             if (future.isSuccess()) {
                 // 获取UDP服务器地址
                 InetSocketAddress udpServerAddress = (InetSocketAddress) future.channel().localAddress();
-                log.info("UDP server started at {}:{}, bind with client {}:{}", udpServerAddress.getAddress(), udpServerAddress.getPort(), request.dstAddr(), request.dstPort());
+                log.info("UDP server started at {}:{}, bind with client {}:{}", serverIp, udpServerAddress.getPort(), clientIp, clientPort);
 
                 // 发送成功响应，包含UDP服务器地址
-                String hostAddress = udpServerAddress.getAddress().getHostAddress();
+                int port = udpServerAddress.getPort();
+                InetAddress udpServerSocketAddress = new InetSocketAddress(serverIp, port).getAddress();
+                String hostAddress = udpServerSocketAddress.getHostAddress();
                 Socks5CommandResponse response = new DefaultSocks5CommandResponse(
                         Socks5CommandStatus.SUCCESS,
-                        hostAddress.contains(":") ? Socks5AddressType.IPv6 : Socks5AddressType.IPv4,
+                        udpServerSocketAddress instanceof Inet6Address ? Socks5AddressType.IPv6 : Socks5AddressType.IPv4,
                         hostAddress,
-                        udpServerAddress.getPort()
+                        port
                 );
 
                 ctx.writeAndFlush(response).addListener(f -> {
