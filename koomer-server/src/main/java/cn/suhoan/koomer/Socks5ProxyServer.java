@@ -1,5 +1,6 @@
 package cn.suhoan.koomer;
 
+import cn.suhoan.koomer.handler.LoginAttemptService;
 import cn.suhoan.koomer.handler.Socks5CommandRequestHandler;
 import cn.suhoan.koomer.handler.Socks5InitialRequestHandler;
 import io.netty.bootstrap.ServerBootstrap;
@@ -23,22 +24,28 @@ public class Socks5ProxyServer {
     private static final Logger log = LoggerFactory.getLogger(Socks5ProxyServer.class);
 
     private final String host;
-
     private final int port;
     private final boolean enableAuth;
     private final String username;
     private final String password;
+    private final LoginAttemptService loginAttemptService;
 
     public Socks5ProxyServer(String host, int port) {
-        this(host, port, false, null, null);
+        this(host, port, false, null, null, null);
     }
 
     public Socks5ProxyServer(String host, int port, boolean enableAuth, String username, String password) {
+        this(host, port, enableAuth, username, password, null);
+    }
+
+    public Socks5ProxyServer(String host, int port, boolean enableAuth, String username, String password,
+                             LoginAttemptService loginAttemptService) {
         this.port = port;
         this.host = host;
         this.enableAuth = enableAuth;
         this.username = username;
         this.password = password;
+        this.loginAttemptService = loginAttemptService;
     }
 
     public void start() throws Exception {
@@ -59,7 +66,7 @@ public class Socks5ProxyServer {
                                     .addLast(new Socks5InitialRequestDecoder());
                             if (enableAuth) {
                                 ch.pipeline()
-                                        .addLast(new Socks5InitialRequestHandler(enableAuth, username, password))
+                                        .addLast(new Socks5InitialRequestHandler(enableAuth, username, password, loginAttemptService))
                                         .addLast(new Socks5PasswordAuthRequestDecoder());
                             } else {
                                 ch.pipeline()

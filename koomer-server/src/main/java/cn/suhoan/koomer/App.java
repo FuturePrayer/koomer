@@ -1,94 +1,86 @@
 package cn.suhoan.koomer;
 
+import cn.suhoan.koomer.handler.LoginAttemptService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import picocli.CommandLine;
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Option;
 
 /**
  * @author wangzefeng
  * @date 2025/9/12
  */
-public class App {
+@Command(name = "koomer", mixinStandardHelpOptions = true, version = "koomer 1.1",
+        description = "A high-performance SOCKS5 proxy server based on Netty.")
+public class App implements Runnable {
 
     private static final Logger log = LoggerFactory.getLogger(App.class);
 
-    static void main(String[] args) {
+    @Option(names = {"-l", "--host"}, description = "Set the host to listen on (default: ${DEFAULT-VALUE}).", defaultValue = "::0")
+    private String host;
+
+    @Option(names = {"-p", "--port"}, description = "Set the port number to listen on (default: ${DEFAULT-VALUE}).", defaultValue = "10808")
+    private int port;
+
+    @Option(names = {"-a", "--enable-auth"}, description = "Enable authentication (default: ${DEFAULT-VALUE}).", defaultValue = "false")
+    private boolean enableAuth;
+
+    @Option(names = {"-u", "--username"}, description = "Set the username for authentication.")
+    private String username;
+
+    @Option(names = {"-w", "--password"}, description = "Set the password for authentication.")
+    private String password;
+
+    @Option(names = {"--max-attempts"}, description = "Max failed login attempts before banning (default: ${DEFAULT-VALUE}). Only effective when auth is enabled.", defaultValue = "5")
+    private int maxAttempts;
+
+    @Option(names = {"--auth-window"}, description = "Time window in seconds for counting failed attempts (default: ${DEFAULT-VALUE}). Only effective when auth is enabled.", defaultValue = "300")
+    private int authWindow;
+
+    @Option(names = {"--ban-duration"}, description = "Ban duration in seconds after exceeding max attempts (default: ${DEFAULT-VALUE}). Only effective when auth is enabled.", defaultValue = "3600")
+    private int banDuration;
+
+    public static void main(String[] args) {
+        int exitCode = new CommandLine(new App()).execute(args);
+        if (exitCode != 0) {
+            System.exit(exitCode);
+        }
+    }
+
+    @Override
+    public void run() {
         try {
-            int port = 10808;
-            String host = "::0";
-            boolean enableAuth = false;
-            String username = null;
-            String password = null;
-            for (int i = 0; i < args.length; i++) {
-                if (args[i].equals("-h") || args[i].equals("--help")){
-                    IO.println("""
-                            Usage: java -jar koomer.jar [options]
-                            Options:
-                              -h, --help                  Show this help message and exit.
-                              -p, --port <port>           Set the port number to listen on.
-                              -l, --host <host>           Set the host to listen on.
-                              -a, --enable-auth           Enable authentication.
-                              -u, --username <username>     Set the username for authentication.
-                              -w, --password <password>     Set the password for authentication.
-                            """);
-                    return;
-                }
-                if (args[i].equals("-p") || args[i].equals("--port")) {
-                    try {
-                        port = Integer.parseInt(args[i + 1]);
-                    } catch (NumberFormatException e) {
-                        log.warn("Invalid port number: {}, program will start on default port {}.", args[i + 1], port);
-                    } catch (ArrayIndexOutOfBoundsException e) {
-                        log.warn("Missing port number, program will start on default port {}.", port);
-                    }
-                }
-                if (args[i].equals("-l") || args[i].equals("--host")) {
-                    try {
-                        host = args[i + 1];
-                    } catch (ArrayIndexOutOfBoundsException e) {
-                        log.warn("Missing host, program will start on default host {}.", host);
-                    }
-                }
-                if (args[i].equals("-a") || args[i].equals("--enable-auth")) {
-                    enableAuth = true;
-                }
-                if (args[i].equals("-u") || args[i].equals("--username")) {
-                    try {
-                        username = args[i + 1];
-                    } catch (ArrayIndexOutOfBoundsException e) {
-                        throw new IllegalArgumentException("Missing username");
-                    }
-                }
-                if (args[i].equals("-w") || args[i].equals("--password")) {
-                    try {
-                        password = args[i + 1];
-                    } catch (ArrayIndexOutOfBoundsException e) {
-                        throw new IllegalArgumentException("Missing password");
-                    }
-                }
-            }
-            checkParam:
+            // 参数校验
             if (enableAuth) {
                 if (username == null || username.isBlank()) {
                     log.warn("The username is null or empty, authentication mode will be disabled.");
                     enableAuth = false;
                     username = null;
                     password = null;
-                    break checkParam;
-                }
-                if (password == null || password.isBlank()) {
+                } else if (password == null || password.isBlank()) {
                     log.warn("The password is null or empty, authentication mode will be disabled.");
                     enableAuth = false;
                     username = null;
                     password = null;
                 }
             } else {
-                if ((username != null && !username.isBlank()) || (password != null && !password.isBlank())){
+                if ((username != null && !username.isBlank()) || (password != null && !password.isBlank())) {
                     log.warn("The authentication mode is not enabled, the username and password parameters will be ignored.");
                 }
                 username = null;
                 password = null;
             }
-            new Socks5ProxyServer(host, port, enableAuth, username, password).start();
+
+            // 创建LoginAttemptService（仅在开启鉴权时生效）
+            LoginAttemptService loginAttemptService = null;
+            if (enableAuth) {
+                loginAttemptService = new LoginAttemptService(maxAttempts, authWindow, banDuration);
+                log.info("Login ban policy enabled: max {} attempts within {} seconds, ban duration {} seconds.",
+                        maxAttempts, authWindow, banDuration);
+            }
+
+            new Socks5ProxyServer(host, port, enableAuth, username, password, loginAttemptService).start();
         } catch (Exception e) {
             log.error("Error starting proxy server", e);
             System.exit(1);
