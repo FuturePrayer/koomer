@@ -26,10 +26,11 @@ public class Socks5UdpServerHandler extends SimpleChannelInboundHandler<Datagram
     // 用于保存UDP通道引用的AttributeKey
     public static final AttributeKey<Channel> UDP_CHANNEL_KEY = AttributeKey.valueOf("UDP_CHANNEL");
 
-    // 客户端地址到目标地址的映射
-    private final ConcurrentMap<InetSocketAddress, InetSocketAddress> clientToTargetMap = new ConcurrentHashMap<>();
+    // 目标已解析地址 → 客户端地址的反向映射（支持多个目标）
+    private final ConcurrentMap<InetSocketAddress, InetSocketAddress> targetToClientMap = new ConcurrentHashMap<>();
 
     private final Channel clientChannel; // 与客户端的TCP连接通道
+    private InetSocketAddress clientUdpAddress; // 客户端UDP地址
 
     public Socks5UdpServerHandler(Channel clientChannel) {
         super(false);
@@ -39,10 +40,9 @@ public class Socks5UdpServerHandler extends SimpleChannelInboundHandler<Datagram
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, DatagramPacket packet) {
         InetSocketAddress sender = packet.sender();
-        ByteBuf buf = packet.content();
 
-        // 检查是否是客户端发送的数据（带有SOCKS5头部）
-        if (isSocks5UdpPacket(buf)) {
+        // 检查来源是否是客户端
+        if (isClientPacket(sender)) {
             handleClientPacket(ctx, packet);
         } else {
             // 目标服务器返回的数据
@@ -50,130 +50,136 @@ public class Socks5UdpServerHandler extends SimpleChannelInboundHandler<Datagram
         }
     }
 
-    private boolean isSocks5UdpPacket(ByteBuf buf) {
-        if (buf.readableBytes() < 4) {
-            return false;
+    private boolean isClientPacket(InetSocketAddress sender) {
+        // 如果已经确定了客户端UDP地址，直接比较
+        if (clientUdpAddress != null) {
+            return clientUdpAddress.equals(sender);
         }
 
-        // 保存当前读取位置
-        buf.markReaderIndex();
+        // 第一次收到数据包，检查IP是否与TCP连接的客户端IP一致
+        if (clientChannel.isActive()) {
+            InetSocketAddress tcpClientAddr = (InetSocketAddress) clientChannel.remoteAddress();
+            if (tcpClientAddr != null && sender.getAddress().equals(tcpClientAddr.getAddress())) {
+                // 锁定客户端UDP地址
+                clientUdpAddress = sender;
+                return true;
+            }
+        }
 
-        // 读取RSV（2字节）和FRAG（1字节）
-        short rsv = buf.readShort();
-        byte frag = buf.readByte();
-
-        // 恢复读取位置
-        buf.resetReaderIndex();
-
-        // 检查RSV是否为0，FRAG是否为0（不支持分片）
-        return rsv == 0 && frag == 0;
+        return false;
     }
+
 
     private void handleClientPacket(ChannelHandlerContext ctx, DatagramPacket packet) {
         InetSocketAddress clientAddress = packet.sender();
         ByteBuf buf = packet.content();
 
-        // 解析SOCKS5 UDP头部
-        // 跳过RSV（2字节）和FRAG（1字节）
-        buf.skipBytes(3);
+        try {
+            // 解析SOCKS5 UDP头部
+            // 跳过RSV（2字节）和FRAG（1字节）
+            buf.skipBytes(3);
 
-        // 读取地址类型
-        byte addrType = buf.readByte();
-        String dstAddr;
-        int dstPort;
+            // 读取地址类型
+            byte addrType = buf.readByte();
+            String dstAddr;
+            int dstPort;
 
-        // 根据地址类型读取目标地址
-        if (addrType == Socks5AddressType.IPv4.byteValue()) {
-            byte[] addrBytes = new byte[4];
-            buf.readBytes(addrBytes);
-            dstAddr = NetUtil.bytesToIpAddress(addrBytes);
-        } else if (addrType == Socks5AddressType.DOMAIN.byteValue()) {
-            int domainLength = buf.readByte() & 0xFF;
-            byte[] domainBytes = new byte[domainLength];
-            buf.readBytes(domainBytes);
-            dstAddr = new String(domainBytes);
-        } else if (addrType == Socks5AddressType.IPv6.byteValue()) {
-            byte[] addrBytes = new byte[16];
-            buf.readBytes(addrBytes);
-            dstAddr = NetUtil.bytesToIpAddress(addrBytes);
-        } else {
-            // 未知地址类型，丢弃数据包
-            return;
-        }
-
-        // 读取目标端口
-        dstPort = buf.readUnsignedShort();
-
-        // 剩余数据是实际要转发的UDP数据
-        ByteBuf data = buf.readBytes(buf.readableBytes());
-
-        // 创建目标地址
-        InetSocketAddress targetAddress = new InetSocketAddress(dstAddr, dstPort);
-
-        // 保存客户端到目标的映射
-        clientToTargetMap.put(clientAddress, targetAddress);
-
-        // 转发数据到目标服务器
-        ctx.writeAndFlush(new DatagramPacket(data, targetAddress)).addListener(future -> {
-            if (!future.isSuccess()) {
-                data.release();
-                clientToTargetMap.remove(clientAddress);
+            // 根据地址类型读取目标地址
+            if (addrType == Socks5AddressType.IPv4.byteValue()) {
+                byte[] addrBytes = new byte[4];
+                buf.readBytes(addrBytes);
+                dstAddr = NetUtil.bytesToIpAddress(addrBytes);
+            } else if (addrType == Socks5AddressType.DOMAIN.byteValue()) {
+                int domainLength = buf.readByte() & 0xFF;
+                byte[] domainBytes = new byte[domainLength];
+                buf.readBytes(domainBytes);
+                dstAddr = new String(domainBytes);
+            } else if (addrType == Socks5AddressType.IPv6.byteValue()) {
+                byte[] addrBytes = new byte[16];
+                buf.readBytes(addrBytes);
+                dstAddr = NetUtil.bytesToIpAddress(addrBytes);
+            } else {
+                // 未知地址类型，丢弃数据包
+                return;
             }
-        });
+
+            // 读取目标端口
+            dstPort = buf.readUnsignedShort();
+
+            // 剩余数据是实际要转发的UDP数据
+            ByteBuf data = buf.readBytes(buf.readableBytes());
+
+            // 创建目标地址（构造函数会触发DNS解析，解析后的IP可用于匹配响应）
+            InetSocketAddress targetAddress = new InetSocketAddress(dstAddr, dstPort);
+
+            // 保存已解析的目标地址 → 客户端地址的反向映射
+            // 使用已解析的IP地址作为key，这样当目标服务器响应时可以正确匹配
+            InetSocketAddress resolvedTarget = new InetSocketAddress(targetAddress.getAddress(), dstPort);
+            targetToClientMap.put(resolvedTarget, clientAddress);
+
+            // 转发数据到目标服务器
+            ctx.writeAndFlush(new DatagramPacket(data, targetAddress)).addListener(future -> {
+                if (!future.isSuccess()) {
+                    log.warn("Failed to forward UDP packet to {}:{}", dstAddr, dstPort, future.cause());
+                    targetToClientMap.remove(resolvedTarget);
+                }
+            });
+        } finally {
+            // 释放原始DatagramPacket（autoRelease=false，需要手动释放）
+            packet.release();
+        }
     }
 
     private void handleTargetResponse(ChannelHandlerContext ctx, DatagramPacket packet) {
-        InetSocketAddress targetAddress = packet.sender();
+        try {
+            InetSocketAddress targetAddress = packet.sender();
 
-        // 查找对应的客户端地址
-        InetSocketAddress clientAddress = null;
-        for (ConcurrentMap.Entry<InetSocketAddress, InetSocketAddress> entry : clientToTargetMap.entrySet()) {
-            if (entry.getValue().equals(targetAddress)) {
-                clientAddress = entry.getKey();
-                break;
+            // 通过已解析的目标地址查找对应的客户端地址
+            InetSocketAddress clientAddress = targetToClientMap.get(targetAddress);
+
+            if (clientAddress == null) {
+                // 没有找到对应的客户端，丢弃数据包
+                log.debug("No client mapping found for target {}", targetAddress);
+                return;
             }
-        }
 
-        if (clientAddress == null) {
-            // 没有找到对应的客户端，丢弃数据包
-            packet.content().release();
-            return;
-        }
+            // 获取响应数据
+            ByteBuf data = packet.content();
 
-        // 获取响应数据
-        ByteBuf data = packet.content();
-
-        // 构造SOCKS5 UDP响应头部
-        ByteBuf responseBuf = ctx.alloc().buffer();
-        // RSV: 2字节0
-        responseBuf.writeShort(0);
-        // FRAG: 1字节0
-        responseBuf.writeByte(0);
-        // ATYP: 根据目标地址类型
-        byte[] addrBytes = targetAddress.getAddress().getAddress();
-        if (addrBytes.length == 4) {
-            responseBuf.writeByte(Socks5AddressType.IPv4.byteValue());
-            responseBuf.writeBytes(addrBytes);
-        } else if (addrBytes.length == 16) {
-            responseBuf.writeByte(Socks5AddressType.IPv6.byteValue());
-            responseBuf.writeBytes(addrBytes);
-        } else {
-            // 不支持的地址类型，丢弃
-            data.release();
-            responseBuf.release();
-            return;
-        }
-        // 端口
-        responseBuf.writeShort(targetAddress.getPort());
-        // 响应数据
-        responseBuf.writeBytes(data);
-
-        // 发送给客户端
-        ctx.writeAndFlush(new DatagramPacket(responseBuf, clientAddress)).addListener(future -> {
-            if (!future.isSuccess()) {
+            // 构造SOCKS5 UDP响应头部
+            ByteBuf responseBuf = ctx.alloc().buffer();
+            // RSV: 2字节0
+            responseBuf.writeShort(0);
+            // FRAG: 1字节0
+            responseBuf.writeByte(0);
+            // ATYP: 根据目标地址类型
+            byte[] addrBytes = targetAddress.getAddress().getAddress();
+            if (addrBytes.length == 4) {
+                responseBuf.writeByte(Socks5AddressType.IPv4.byteValue());
+                responseBuf.writeBytes(addrBytes);
+            } else if (addrBytes.length == 16) {
+                responseBuf.writeByte(Socks5AddressType.IPv6.byteValue());
+                responseBuf.writeBytes(addrBytes);
+            } else {
+                // 不支持的地址类型，丢弃
                 responseBuf.release();
+                return;
             }
-        });
+            // 端口
+            responseBuf.writeShort(targetAddress.getPort());
+            // 响应数据
+            responseBuf.writeBytes(data);
+
+            // 发送给客户端（Netty会在writeAndFlush完成后自动释放DatagramPacket及其content）
+            ctx.writeAndFlush(new DatagramPacket(responseBuf, clientAddress)).addListener(future -> {
+                if (!future.isSuccess()) {
+                    log.warn("Failed to send UDP response to client {}", clientAddress, future.cause());
+                }
+            });
+        } finally {
+            // 释放原始DatagramPacket（autoRelease=false，需要手动释放）
+            packet.release();
+        }
     }
 
     @Override

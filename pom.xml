@@ -18,8 +18,8 @@
         <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <koomer.version>${project.version}</koomer.version>
-        <netty.version>4.2.6.Final</netty.version>
-        <logback.version>1.5.18</logback.version>
+        <netty.version>4.2.10.Final</netty.version>
+        <logback.version>1.5.32</logback.version>
     </properties>
 
     <dependencyManagement>

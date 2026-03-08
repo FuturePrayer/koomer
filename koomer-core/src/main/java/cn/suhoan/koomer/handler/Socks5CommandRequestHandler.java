@@ -90,10 +90,9 @@ public class Socks5CommandRequestHandler extends SimpleChannelInboundHandler<Soc
         String clientIp = remoteAddress.getHostString();
         int clientPort = remoteAddress.getPort();
 
-        // 创建UDP服务器
-        EventLoopGroup udpGroup = new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory());
+        // 使用当前TCP连接的EventLoop，避免创建新线程池
         Bootstrap udpBootstrap = new Bootstrap();
-        udpBootstrap.group(udpGroup)
+        udpBootstrap.group(ctx.channel().eventLoop())
                 .channel(NioDatagramChannel.class)
                 .handler(new ChannelInitializer<NioDatagramChannel>() {
                     @Override
@@ -102,8 +101,8 @@ public class Socks5CommandRequestHandler extends SimpleChannelInboundHandler<Soc
                     }
                 });
 
-        // 绑定到随机端口
-        ChannelFuture bindFuture = udpBootstrap.bind(0);
+        // 绑定到服务器IP的随机端口
+        ChannelFuture bindFuture = udpBootstrap.bind(serverIp, 0);
 
         bindFuture.addListener((ChannelFutureListener) future -> {
             if (future.isSuccess()) {
@@ -125,16 +124,17 @@ public class Socks5CommandRequestHandler extends SimpleChannelInboundHandler<Soc
                 ctx.writeAndFlush(response).addListener(f -> {
                     if (!f.isSuccess()) {
                         future.channel().close();
-                        udpGroup.shutdownGracefully();
                         ctx.close();
                     }
                 });
+
+                // 移除TCP管道中的SOCKS5解码器/编码器，UDP ASSOCIATE后TCP连接仅用于保活
+                removeSocksPipelineHandlers(ctx);
 
                 // 保存UDP通道引用，以便在TCP连接关闭时关闭UDP服务器
                 ctx.channel().attr(Socks5UdpServerHandler.UDP_CHANNEL_KEY).set(future.channel());
             } else {
                 sendErrorResponse(ctx, request, Socks5CommandStatus.FAILURE);
-                udpGroup.shutdownGracefully();
             }
         });
     }
@@ -147,6 +147,29 @@ public class Socks5CommandRequestHandler extends SimpleChannelInboundHandler<Soc
                 request.dstPort()
         );
         ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
+    }
+
+    /**
+     * 移除TCP管道中的SOCKS5相关处理器。
+     * UDP ASSOCIATE完成后，TCP连接仅用于保活信号，不再需要SOCKS5协议处理。
+     */
+    private void removeSocksPipelineHandlers(ChannelHandlerContext ctx) {
+        ChannelPipeline pipeline = ctx.pipeline();
+        removePipelineHandler(pipeline, Socks5ServerEncoder.class);
+        removePipelineHandler(pipeline, Socks5CommandRequestDecoder.class);
+        removePipelineHandler(pipeline, Socks5InitialRequestDecoder.class);
+        removePipelineHandler(pipeline, Socks5PasswordAuthRequestDecoder.class);
+        removePipelineHandler(pipeline, Socks5CommandRequestHandler.class);
+    }
+
+    private void removePipelineHandler(ChannelPipeline pipeline, Class<? extends ChannelHandler> handlerType) {
+        try {
+            if (pipeline.get(handlerType) != null) {
+                pipeline.remove(handlerType);
+            }
+        } catch (Exception e) {
+            // ignore if handler not found
+        }
     }
 
     @Override
